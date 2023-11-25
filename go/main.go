@@ -4,7 +4,6 @@ package main
 // sqlx的な参考: https://jmoiron.github.io/sqlx/
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -33,9 +32,6 @@ var (
 	powerDNSSubdomainAddress string
 	dbConn                   *sqlx.DB
 	secret                   = []byte("isucon13_session_cookiestore_defaultsecret")
-	userCache                *stringCache[UserModel]
-	iconHashCache            *stringCache[IconHashCacheRecord]
-	notFound                 = errors.New("not found")
 )
 
 func init() {
@@ -113,8 +109,6 @@ func connectDB(logger echo.Logger) (*sqlx.DB, error) {
 }
 
 func initializeHandler(c echo.Context) error {
-	userCache.reset()
-	iconHashCache.reset()
 	if out, err := exec.Command("../sql/init.sh").CombinedOutput(); err != nil {
 		c.Logger().Warnf("init.sh failed with err=%s", string(out))
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+err.Error())
@@ -132,14 +126,6 @@ func main() {
 	go func() {
 		log.Print(http.ListenAndServe("0.0.0.0:6060", nil))
 	}()
-
-	userCache = newStringCache(100, func(key string) (*UserModel, error) {
-		return nil, notFound
-	})
-
-	iconHashCache = newStringCache(100, func(key string) (*IconHashCacheRecord, error) {
-		return nil, notFound
-	})
 
 	e := echo.New()
 	//e.Debug = true
