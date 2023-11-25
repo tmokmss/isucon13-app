@@ -1,5 +1,18 @@
 USE `isupipe`;
 
+DROP TABLE IF EXISTS themes;
+DROP TABLE IF EXISTS icons;
+DROP TABLE IF EXISTS reservation_slots;
+DROP TABLE IF EXISTS livestream_viewers_history;
+DROP TABLE IF EXISTS livecomment_reports;
+DROP TABLE IF EXISTS ng_words;
+DROP TABLE IF EXISTS reactions;
+DROP TABLE IF EXISTS tags;
+DROP TABLE IF EXISTS livestream_tags;
+DROP TABLE IF EXISTS livecomments;
+DROP TABLE IF EXISTS livestreams;
+DROP TABLE IF EXISTS users;
+
 -- ユーザ (配信者、視聴者)
 CREATE TABLE `users` (
   `id` BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -14,7 +27,8 @@ CREATE TABLE `users` (
 CREATE TABLE `icons` (
   `id` BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `user_id` BIGINT NOT NULL,
-  `image` LONGBLOB NOT NULL
+  `image` LONGBLOB NOT NULL,
+  `icon_hash` varchar(100)
 ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 
 -- ユーザごとのカスタムテーマ
