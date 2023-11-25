@@ -29,6 +29,7 @@ const (
 )
 
 var fallbackImage = "../img/NoImage.jpg"
+var fallbackHash string
 
 type UserModel struct {
 	ID             int64  `db:"id"`
@@ -287,6 +288,8 @@ func registerHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
 	}
 
+	themeCache.set(user_id, ThemeModel{})
+
 	return c.JSON(http.StatusCreated, user)
 }
 
@@ -422,17 +425,22 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 		return User{}, err
 	}
 
-	var image []byte
-	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
+	var iconHash string
+	if err := tx.GetContext(ctx, &iconHash, "SELECT icon_hash FROM icons WHERE user_id = ?", userModel.ID); err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			return User{}, err
 		}
-		image, err = os.ReadFile(fallbackImage)
-		if err != nil {
-			return User{}, err
+		if fallbackHash == "" {
+			image, err := os.ReadFile(fallbackImage)
+			if err != nil {
+				return User{}, err
+			}
+			fallbackHash = fmt.Sprintf("%x", sha256.Sum256(image))
 		}
+		iconHash = fallbackHash
+	} else {
+		iconHash = iconHash[1 : len(iconHash)-1]
 	}
-	iconHash := sha256.Sum256(image)
 
 	user := User{
 		ID:          userModel.ID,
@@ -443,7 +451,7 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 			ID:       themeModel.ID,
 			DarkMode: themeModel.DarkMode,
 		},
-		IconHash: fmt.Sprintf("%x", iconHash),
+		IconHash: iconHash,
 	}
 
 	return user, nil

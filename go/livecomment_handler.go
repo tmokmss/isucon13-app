@@ -389,8 +389,9 @@ func moderateHandler(c echo.Context) error {
 	// NGワードにヒットする過去の投稿も全削除する
 	for _, ngword := range ngwords {
 		// ライブコメント一覧取得
-		query := `DELETE FROM livecomments WHERE livestream_id = ? AND MATCH (comment) AGAINST (? IN BOOLEAN MODE);`
-		if _, err := tx.ExecContext(ctx, query, livestreamID, ngword.Word); err != nil {
+		// query := `DELETE FROM livecomments WHERE livestream_id = ? AND MATCH (comment) AGAINST (? IN BOOLEAN MODE);`
+		query := `DELETE FROM livecomments WHERE livestream_id = ? AND comment LIKE ?;`
+		if _, err := tx.ExecContext(ctx, query, livestreamID, "%"+ngword.Word+"%"); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete old livecomments that hit spams: "+err.Error())
 		}
 	}
