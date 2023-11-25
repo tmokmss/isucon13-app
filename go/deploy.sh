@@ -25,6 +25,8 @@ do
 ssh -t $t "cd isucon13-infra && make reset-log" &
 done
 
+wait
+
 for t in ${TARGETS[@]}
 do
 ssh -t $t "journalctl -q -u $SERVICE | tail -5"
