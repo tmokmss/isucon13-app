@@ -11,17 +11,13 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"runtime"
 	"strconv"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/jmoiron/sqlx"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
-
 	"github.com/gorilla/sessions"
+	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo-contrib/session"
-	echolog "github.com/labstack/gommon/log"
+	"github.com/labstack/echo/v4"
 )
 
 const (
@@ -129,12 +125,6 @@ func initializeHandler(c echo.Context) error {
 }
 
 func main() {
-	runtime.SetBlockProfileRate(1)
-	runtime.SetMutexProfileFraction(1)
-	go func() {
-		log.Print(http.ListenAndServe("0.0.0.0:6060", nil))
-	}()
-
 	themeCache = newStringCache(100, func(key string) (*ThemeModel, error) {
 		return nil, notFound
 	})
@@ -147,8 +137,8 @@ func main() {
 
 	e := echo.New()
 	//e.Debug = true
-	e.Logger.SetLevel(echolog.DEBUG) // TODO: raise
-	e.Use(middleware.Logger())
+	//e.Logger.SetLevel(echolog.DEBUG) // TODO: raise
+	//e.Use(middleware.Logger())
 	cookieStore := sessions.NewCookieStore(secret)
 	cookieStore.Options.Domain = "*.u.isucon.dev"
 	e.Use(session.Middleware(cookieStore))
