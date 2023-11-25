@@ -200,16 +200,6 @@ func getUserStatisticsHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, stats)
 }
 
-type ReactionStatsModel struct {
-	LivestreamID int64 `db:"livestream_id"`
-	Count        int64 `db:"count"`
-}
-
-type TipStatsModel struct {
-	LivestreamID int64 `db:"livestream_id"`
-	Count        int64 `db:"count"`
-}
-
 func getLivestreamStatisticsHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
@@ -229,12 +219,6 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 	}
 	defer tx.Rollback()
 
-	var livestreamCount int64
-	if err := tx.GetContext(ctx, &livestreamCount, "SELECT COUNT(*) FROM livestreams"); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestream: "+err.Error())
-	}
-	ranking2 := make(LivestreamRankingEntry, livestreamCount)
-
 	var livestream LivestreamModel
 	if err := tx.GetContext(ctx, &livestream, "SELECT * FROM livestreams WHERE id = ?", livestreamID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -251,16 +235,6 @@ func getLivestreamStatisticsHandler(c echo.Context) error {
 
 	// ランク算出
 	var ranking LivestreamRanking
-	reactionStats := []ReactionStatsModel{}
-	if err := tx.GetContext(ctx, &reactionStats, "SELECT l.id as livestream_id, COUNT(*) as count FROM livestreams l INNER JOIN reactions r ON l.id = r.livestream_id GROUP BY l.id;"); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count reactions: "+err.Error())
-	}
-
-	tipStats := []TipStatsModel{}
-	if err := tx.GetContext(ctx, &tipStats, "SELECT l.id as livestream_id, SUM(l2.tip) as count FROM livestreams l INNER JOIN livecomments l2 ON l.id = l2.livestream_id GROUP BY l.id;"); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count reactions: "+err.Error())
-	}
-
 	for _, livestream := range livestreams {
 		var reactions int64
 		if err := tx.GetContext(ctx, &reactions, "SELECT COUNT(*) FROM livestreams l INNER JOIN reactions r ON l.id = r.livestream_id WHERE l.id = ?", livestream.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
