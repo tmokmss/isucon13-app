@@ -288,7 +288,8 @@ func registerHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
 	}
 
-	themeCache.set(user_id, ThemeModel{})
+	themeCache.set(string(userID), &themeModel)
+	userCache.set(string(userID), &userModel)
 
 	return c.JSON(http.StatusCreated, user)
 }
@@ -421,10 +422,15 @@ func verifyUserSession(c echo.Context) error {
 
 func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (User, error) {
 	themeModel := ThemeModel{}
-	if err := tx.GetContext(ctx, &themeModel, "SELECT * FROM themes WHERE user_id = ?", userModel.ID); err != nil {
-		return User{}, err
+	themeCached, ok := themeCache.get(string(userModel.ID))
+	if !ok {
+		if err := tx.GetContext(ctx, &themeModel, "SELECT * FROM themes WHERE user_id = ?", userModel.ID); err != nil {
+			return User{}, err
+		}
+		themeCache.set(string(userModel.ID), &themeModel)
+	} else {
+		themeModel = *themeCached
 	}
-
 	var iconHash string
 	if err := tx.GetContext(ctx, &iconHash, "SELECT icon_hash FROM icons WHERE user_id = ?", userModel.ID); err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
