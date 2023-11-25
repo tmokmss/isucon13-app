@@ -89,6 +89,8 @@ func getIconHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	username := c.Param("username")
+	hash := c.Request().Header.Get("If-None-Match")
+	c.Logger().Info(hash)
 
 	tx, err := dbConn.BeginTxx(ctx, nil)
 	if err != nil {
@@ -102,6 +104,21 @@ func getIconHandler(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusNotFound, "not found user that has the given username")
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
+	}
+
+	if hash != "" {
+		// キャッシュを使いたい
+		var currentHash string
+		if err := tx.GetContext(ctx, &currentHash, "SELECT icon_hash FROM icons WHERE user_id = ?", user.ID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return c.File(fallbackImage)
+			} else {
+				return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user icon: "+err.Error())
+			}
+		}
+		if currentHash == hash {
+			return c.NoContent(http.StatusNotModified)
+		}
 	}
 
 	var image []byte
@@ -144,7 +161,9 @@ func postIconHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete old user icon: "+err.Error())
 	}
 
-	rs, err := tx.ExecContext(ctx, "INSERT INTO icons (user_id, image) VALUES (?, ?)", userID, req.Image)
+	iconHash := sha256.Sum256(req.Image)
+
+	rs, err := tx.ExecContext(ctx, "INSERT INTO icons (user_id, image, icon_hash) VALUES (?, ?, ?)", userID, req.Image, iconHash)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to insert new user icon: "+err.Error())
 	}
