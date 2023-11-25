@@ -23,3 +23,19 @@ ALTER TABLE `tags` auto_increment = 1;
 ALTER TABLE `livecomments` auto_increment = 1;
 ALTER TABLE `livestreams` auto_increment = 1;
 ALTER TABLE `users` auto_increment = 1;
+
+DROP INDEX `index_userid` ON `icons`;
+DROP INDEX `index_userid` ON `themes`;
+DROP INDEX `index_userid` ON `livestreams`;
+DROP INDEX `index_start_end` ON `reservation_slots`;
+DROP INDEX `index_lsid_tip` ON `livecomments`;
+DROP INDEX `index_user_id_lsid_word` ON `ng_words`;
+DROP INDEX `index_lsid_tip` ON `reactions`;
+
+CREATE INDEX `index_userid` ON `icons` (`user_id`);
+CREATE INDEX `index_userid` ON `themes` (`user_id`);
+CREATE INDEX `index_userid` ON `livestreams` (`user_id`);
+CREATE INDEX `index_start_end` ON `reservation_slots` (`start_at`, `end_at`);
+CREATE INDEX `index_lsid_tip` ON `livecomments` (`livestream_id`, `tip`);
+CREATE INDEX `index_user_id_lsid_word` ON `ng_words` (`user_id`, `livestream_id`, `word`);
+CREATE INDEX `index_lsid_tip` ON `reactions` (`livestream_id`);
