@@ -42,6 +42,5 @@ CREATE INDEX `index_lsid` ON `livestream_tags` (`livestream_id`);
 CREATE INDEX `index_user_id_lsid_word` ON `ng_words` (`user_id`, `livestream_id`, `word`);
 CREATE INDEX `index_lsid_createdat` ON `reactions` (`livestream_id`, `created_at` DESC);
 
-
 ALTER TABLE icons DROP icon_hash;
 ALTER TABLE icons ADD icon_hash varchar(255);

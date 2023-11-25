@@ -47,6 +47,10 @@ type User struct {
 	IconHash    string `json:"icon_hash,omitempty"`
 }
 
+type IconHashCacheRecord struct {
+	IconHash string
+}
+
 type Theme struct {
 	ID       int64 `json:"id"`
 	DarkMode bool  `json:"dark_mode"`
@@ -91,29 +95,36 @@ func getIconHandler(c echo.Context) error {
 	username := c.Param("username")
 	hash := c.Request().Header.Get("If-None-Match")
 
-	tx, err := dbConn.BeginTxx(ctx, nil)
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to begin transaction: "+err.Error())
+	user, _ := userCache.get(username)
+	if user == nil {
+		user = &UserModel{}
 	}
-	defer tx.Rollback()
 
-	var user UserModel
-	if err := tx.GetContext(ctx, &user, "SELECT id FROM users WHERE name = ?", username); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusNotFound, "not found user that has the given username")
+	if user == nil {
+		if err := dbConn.GetContext(ctx, user, "SELECT * FROM users WHERE name = ?", username); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return echo.NewHTTPError(http.StatusNotFound, "not found user that has the given username")
+			}
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 		}
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
+		userCache.set(username, user)
 	}
 
 	if hash != "" {
 		// キャッシュを使いたい
 		var currentHash string
-		if err := tx.GetContext(ctx, &currentHash, "SELECT icon_hash FROM icons WHERE user_id = ?", user.ID); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return c.File(fallbackImage)
-			} else {
-				return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user icon: "+err.Error())
+		currentHashRecord, ok := iconHashCache.get(string(user.ID))
+		if ok {
+			currentHash = currentHashRecord.IconHash
+		} else {
+			if err := dbConn.GetContext(ctx, &currentHash, "SELECT icon_hash FROM icons WHERE user_id = ?", user.ID); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return c.File(fallbackImage)
+				} else {
+					return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user icon: "+err.Error())
+				}
 			}
+			iconHashCache.set(string(user.ID), &IconHashCacheRecord{IconHash: currentHash})
 		}
 		if currentHash == hash {
 			return c.NoContent(http.StatusNotModified)
@@ -121,7 +132,7 @@ func getIconHandler(c echo.Context) error {
 	}
 
 	var image []byte
-	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", user.ID); err != nil {
+	if err := dbConn.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", user.ID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return c.File(fallbackImage)
 		} else {
@@ -175,6 +186,7 @@ func postIconHandler(c echo.Context) error {
 	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
 	}
+	iconHashCache.set(string(userID), &IconHashCacheRecord{IconHash: iconHash})
 
 	return c.JSON(http.StatusCreated, &PostIconResponse{
 		ID: iconID,
@@ -286,6 +298,7 @@ func registerHandler(c echo.Context) error {
 	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
 	}
+	userCache.set(user.Name, &userModel)
 
 	return c.JSON(http.StatusCreated, user)
 }
