@@ -94,6 +94,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 
 	var ranking UserRanking
 	for _, user := range users {
+		// TODO: N+1
 		var reactions int64
 		query := `
 		SELECT COUNT(*) FROM users u
