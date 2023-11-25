@@ -167,6 +167,8 @@ func reserveLivestreamHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
 	}
 
+	livestreamCache.set(string(livestream.ID), livestreamModel)
+
 	return c.JSON(http.StatusCreated, livestream)
 }
 
@@ -486,9 +488,16 @@ func getLivecommentReportsHandler(c echo.Context) error {
 
 func fillLivestreamResponse(ctx context.Context, tx *sqlx.Tx, livestreamModel LivestreamModel) (Livestream, error) {
 	ownerModel := UserModel{}
-	if err := tx.GetContext(ctx, &ownerModel, "SELECT * FROM users WHERE id = ?", livestreamModel.UserID); err != nil {
-		return Livestream{}, err
+	ownerModelCached, ok := userCache.get(string(livestreamModel.UserID))
+	if ok {
+		ownerModel = *ownerModelCached
+	} else {
+		if err := tx.GetContext(ctx, &ownerModel, "SELECT * FROM users WHERE id = ?", livestreamModel.UserID); err != nil {
+			return Livestream{}, err
+		}
+		userCache.set(string(livestreamModel.UserID), &ownerModel)
 	}
+
 	owner, err := fillUserResponse(ctx, tx, ownerModel)
 	if err != nil {
 		return Livestream{}, err

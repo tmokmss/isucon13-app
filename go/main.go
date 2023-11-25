@@ -35,6 +35,7 @@ var (
 	secret                   = []byte("isucon13_session_cookiestore_defaultsecret")
 	themeCache               *stringCache[ThemeModel]
 	userCache                *stringCache[UserModel]
+	livestreamCache          *stringCache[LivestreamModel]
 	notFound                 = errors.New("not found")
 )
 
@@ -115,6 +116,7 @@ func connectDB(logger echo.Logger) (*sqlx.DB, error) {
 func initializeHandler(c echo.Context) error {
 	themeCache.reset()
 	userCache.reset()
+	livestreamCache.reset()
 	if out, err := exec.Command("../sql/init.sh").CombinedOutput(); err != nil {
 		c.Logger().Warnf("init.sh failed with err=%s", string(out))
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+err.Error())
@@ -137,6 +139,9 @@ func main() {
 		return nil, notFound
 	})
 	userCache = newStringCache(100, func(key string) (*UserModel, error) {
+		return nil, notFound
+	})
+	livestreamCache = newStringCache(100, func(key string) (*LivestreamModel, error) {
 		return nil, notFound
 	})
 

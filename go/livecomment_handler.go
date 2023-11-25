@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -188,35 +189,27 @@ func postLivecommentHandler(c echo.Context) error {
 	defer tx.Rollback()
 
 	var livestreamModel LivestreamModel
-	if err := tx.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livestreamID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusNotFound, "livestream not found")
-		} else {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestream: "+err.Error())
+	livestreamModelCached, ok := livestreamCache.get(string(livestreamID))
+	if ok {
+		livestreamModel = *livestreamModelCached
+	} else {
+		if err := tx.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livestreamID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return echo.NewHTTPError(http.StatusNotFound, "livestream not found")
+			} else {
+				return echo.NewHTTPError(http.StatusInternalServerError, "failed to get livestream: "+err.Error())
+			}
 		}
+		livestreamCache.set(string(livestreamID), &livestreamModel)
 	}
-
 	// スパム判定
 	var ngwords []*NGWord
-	if err := tx.SelectContext(ctx, &ngwords, "SELECT id, user_id, livestream_id, word FROM ng_words WHERE user_id = ? AND livestream_id = ?", livestreamModel.UserID, livestreamModel.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err := tx.SelectContext(ctx, &ngwords, "SELECT word FROM ng_words WHERE user_id = ? AND livestream_id = ?", livestreamModel.UserID, livestreamModel.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get NG words: "+err.Error())
 	}
 
-	var hitSpam int
 	for _, ngword := range ngwords {
-		query := `
-		SELECT COUNT(*)
-		FROM
-		(SELECT ? AS text) AS texts
-		INNER JOIN
-		(SELECT CONCAT('%', ?, '%')	AS pattern) AS patterns
-		ON texts.text LIKE patterns.pattern;
-		`
-		if err := tx.GetContext(ctx, &hitSpam, query, req.Comment, ngword.Word); err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get hitspam: "+err.Error())
-		}
-		c.Logger().Infof("[hitSpam=%d] comment = %s", hitSpam, req.Comment)
-		if hitSpam >= 1 {
+		if strings.Contains(req.Comment, ngword.Word) {
 			return echo.NewHTTPError(http.StatusBadRequest, "このコメントがスパム判定されました")
 		}
 	}
@@ -407,8 +400,14 @@ func moderateHandler(c echo.Context) error {
 
 func fillLivecommentResponse(ctx context.Context, tx *sqlx.Tx, livecommentModel LivecommentModel) (Livecomment, error) {
 	commentOwnerModel := UserModel{}
-	if err := tx.GetContext(ctx, &commentOwnerModel, "SELECT * FROM users WHERE id = ?", livecommentModel.UserID); err != nil {
-		return Livecomment{}, err
+	commentOwnerModelCached, ok := userCache.get(string(livecommentModel.UserID))
+	if ok {
+		commentOwnerModel = *commentOwnerModelCached
+	} else {
+		if err := tx.GetContext(ctx, &commentOwnerModel, "SELECT * FROM users WHERE id = ?", livecommentModel.UserID); err != nil {
+			return Livecomment{}, err
+		}
+		userCache.set(string(livecommentModel.UserID), &commentOwnerModel)
 	}
 	commentOwner, err := fillUserResponse(ctx, tx, commentOwnerModel)
 	if err != nil {
@@ -416,8 +415,14 @@ func fillLivecommentResponse(ctx context.Context, tx *sqlx.Tx, livecommentModel 
 	}
 
 	livestreamModel := LivestreamModel{}
-	if err := tx.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livecommentModel.LivestreamID); err != nil {
-		return Livecomment{}, err
+	livestreamModelCached, ok := livestreamCache.get(string(livecommentModel.LivestreamID))
+	if ok {
+		livestreamModel = *livestreamModelCached
+	} else {
+		if err := tx.GetContext(ctx, &livestreamModel, "SELECT * FROM livestreams WHERE id = ?", livecommentModel.LivestreamID); err != nil {
+			return Livecomment{}, err
+		}
+		livestreamCache.set(string(livecommentModel.LivestreamID), &livestreamModel)
 	}
 	livestream, err := fillLivestreamResponse(ctx, tx, livestreamModel)
 	if err != nil {
@@ -438,9 +443,16 @@ func fillLivecommentResponse(ctx context.Context, tx *sqlx.Tx, livecommentModel 
 
 func fillLivecommentReportResponse(ctx context.Context, tx *sqlx.Tx, reportModel LivecommentReportModel) (LivecommentReport, error) {
 	reporterModel := UserModel{}
-	if err := tx.GetContext(ctx, &reporterModel, "SELECT * FROM users WHERE id = ?", reportModel.UserID); err != nil {
-		return LivecommentReport{}, err
+	reporterModelCached, ok := userCache.get(string(reportModel.UserID))
+	if ok {
+		reporterModel = *reporterModelCached
+	} else {
+		if err := tx.GetContext(ctx, &reporterModel, "SELECT * FROM users WHERE id = ?", reportModel.UserID); err != nil {
+			return LivecommentReport{}, err
+		}
+		userCache.set(string(reportModel.UserID), &reporterModel)
 	}
+
 	reporter, err := fillUserResponse(ctx, tx, reporterModel)
 	if err != nil {
 		return LivecommentReport{}, err
