@@ -22,7 +22,7 @@ wait
 
 for t in ${TARGETS[@]}
 do
-ssh -t $t "cd isucon11-infra && make reset-log" &
+ssh -t $t "cd isucon13-infra && make reset-log" &
 done
 
 for t in ${TARGETS[@]}
