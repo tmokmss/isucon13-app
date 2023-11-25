@@ -109,6 +109,16 @@ func connectDB(logger echo.Logger) (*sqlx.DB, error) {
 	return db, nil
 }
 
+func initializeCacheHandler(c echo.Context) error {
+	themeCache.reset()
+	userCache.reset()
+	livestreamCache.reset()
+	c.Request().Header.Add("Content-Type", "application/json;charset=utf-8")
+	return c.JSON(http.StatusOK, InitializeResponse{
+		Language: "golang",
+	})
+}
+
 func initializeHandler(c echo.Context) error {
 	themeCache.reset()
 	userCache.reset()
@@ -146,6 +156,7 @@ func main() {
 
 	// 初期化
 	e.POST("/api/initialize", initializeHandler)
+	e.POST("/api/initialize_cache", initializeCacheHandler)
 
 	// top
 	e.GET("/api/tag", getTagHandler)
